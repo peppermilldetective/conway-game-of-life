@@ -5,24 +5,94 @@ extern crate rand;
 struct Cells {
    width: usize,
    height: usize,
-   states: Vec<f32>
+   states: Vec<i32>,
+   neighbors: Vec<Vec<usize>>
+}
+
+macro_rules! go_up {
+   ($x:expr, $w:expr, $a:expr) => {
+      ($x-$w+$a)%$a
+   };
+}
+
+macro_rules! go_down {
+   ($x:expr, $w:expr, $a:expr) => {
+      ($x+$w+$a)%$a
+   };
+}
+
+macro_rules! go_left {
+   ($x:expr, $w:expr) => {
+      $w*($x/$w)+($x-1)%$w
+   };
+}
+
+macro_rules! go_right {
+   ($x:expr, $w:expr) => {
+      $w*($x/$w)+($x+1)%$w
+   };
 }
 
 impl Cells {
-   fn new(alive: f32, width: usize, height: usize) -> Cells {
-      let states = (0..width*height).map(|x| {
-         (rand::random::<u32>() % 2) as f32
+   fn new(width: usize, height: usize) -> Cells {
+      let area = width*height;
+      let states = (0..area).map(|x| {
+         (rand::random::<u32>() % 2) as i32
+      }).collect();
+
+      let neighbors: Vec<Vec<usize>> = (0..area).map(|x| {
+         let up = go_up!(x, width, area);
+         let down = go_down!(x, width, area);
+         let left = go_left!(x, width);
+         let right = go_right!(x, width);
+         let ul_corner = go_left!(up, width);
+         let ur_corner = go_right!(up, width);
+         let ll_corner = go_left!(down, width);
+         let lr_corner = go_right!(down, width);
+
+         vec![
+            ul_corner,
+            up,
+            ur_corner,
+            left,
+            right,
+            ll_corner,
+            down,
+            lr_corner
+         ]
       }).collect();
 
       Cells {
          width,
          height,
-         states
+         states,
+         neighbors
       }
    }
 
-   fn tick(&mut self, neighbors: Vec<f32>) {
-      let new_state = vec![0.0f32;self.width * self.height];
+   fn tick(&mut self) {
+      let length = self.width * self.height;
+      let mut new_state = vec![0i32; length];
+
+      for i in 0..length {
+         new_state[i] = {
+            let sum: i32 = self.neighbors[i].iter().map(|index| {
+               self.states[index.to_owned()]
+            }).collect::<Vec<i32>>().iter().sum();
+
+            if self.states[i] > 0 && (sum < 2 || sum > 3) {
+                  0
+            }
+            else if self.states[i] < 1 && sum == 3 {
+                  1
+            }
+            else {
+               self.states[i]
+            }
+         }
+      }
+
+      self.states = new_state;
    }
 }
 
@@ -30,8 +100,14 @@ fn main() {
    use glium::index::PrimitiveType;
    use glium::{glutin, Surface};
 
+   let width = 1024;
+   let height = 720;
+   let title = "Conway's Game of Life";
+
    let mut events_loop = glutin::EventsLoop::new();
-   let wb = glutin::WindowBuilder::new();
+   let wb = glutin::WindowBuilder::new()
+      .with_dimensions(glutin::dpi::LogicalSize::new(width as f64, height as f64))
+      .with_title(title);
    let cb = glutin::ContextBuilder::new();
    let display = glium::Display::new(wb, cb, &events_loop).unwrap();
    let CELL_ROW_COUNT = 50;
@@ -42,11 +118,12 @@ fn main() {
       #version 140
 
       in vec2 position;
+      in vec2 index;
 
-      uniform mat4 matrix;
+      uniform 
 
       void main() {
-         gl_Position = matrix * vec4(position, 0.0, 1.0);
+         gl_Position = vec4(position, 0.0, 1.0);
       }
    "#;
 
@@ -65,7 +142,7 @@ fn main() {
    let program =
       glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-   let (mut vertex_buffer, index_buffer) = {
+   let (vertex_buffer, index_buffer) = {
       #[derive(Copy, Clone)]
       struct Vertex {
          position: [f32; 2],
@@ -114,36 +191,25 @@ fn main() {
       )
    };
 
-   let grid = create_initial();
+   let mut cells: Cells = Cells::new(50, 50);
 
    let mut closed = false;
    while !closed {
-      let is_alive = 1.0f32;
-
       let uniforms = uniform! {
-         matrix: [
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0f32],
-         ],
-         alive: is_alive,
       };
 
-      let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
-
-      let mut target = display.draw();
-      target.clear_color(0.0, 0.0, 0.0, 1.0);
-      target
+      let mut frame = display.draw();
+      frame.clear_color(0.0, 0.0, 0.0, 1.0);
+      frame
          .draw(
             &vertex_buffer,
-            &indices,
+            &index_buffer,
             &program,
             &uniforms,
             &Default::default(),
          )
          .unwrap();
-      target.finish().unwrap();
+      frame.finish().unwrap();
 
       events_loop.poll_events(|ev| match ev {
          glutin::Event::WindowEvent { event, .. } => match event {
@@ -152,5 +218,7 @@ fn main() {
          },
          _ => (),
       });
+
+      cells.tick();
    }
 }
