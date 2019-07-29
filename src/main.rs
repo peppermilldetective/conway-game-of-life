@@ -1,3 +1,5 @@
+#![allow(clippy::single_match)]
+
 #[macro_use]
 extern crate glium;
 extern crate rand;
@@ -80,24 +82,24 @@ impl Drawable for Cell {
       program: &glium::Program,
       frame: &mut glium::Frame)
    {
-   use glium::Surface;
+      use glium::Surface;
 
-   if self.alive == 0 {
-      return;
-   }
+      if self.alive == 0 {
+         return;
+      }
 
-   let uniforms = uniform! {
-   };
+      let uniforms = uniform! {
+      };
 
-   frame
-      .draw(
-         vertex_buffer,
-         index_buffer,
-         program,
-         &uniforms,
-         &Default::default(),
-      )
-      .unwrap();
+      frame
+         .draw(
+            vertex_buffer,
+            index_buffer,
+            program,
+            &uniforms,
+            &Default::default(),
+         )
+         .unwrap();
    }
 
    fn create_buffers(&self, display: &glium::Display) -> (glium::VertexBuffer<Vertex>, glium::IndexBuffer<u16>) {
