@@ -28,7 +28,7 @@ impl Grid {
       for y in 0..height {
          for x in 0..width {
             let draw_x = -1.0 + (d_x * x as f32);
-            let draw_y = -1.0 + (d_y * y as f32);
+            let draw_y = 1.0 - (d_y * y as f32);
 
             positions.push([
                draw_x,
@@ -158,5 +158,14 @@ impl Grid {
       let cleared = vec![0; grid.alive.len()];
 
       grid.alive = cleared;
+   }
+
+   pub fn process_click(grid: &mut Grid, x: f64, y: f64) {
+      let grid_x = (x*f64::from(grid.width)).floor() as usize;
+      let grid_y = (y*f64::from(grid.height)).floor() as usize;
+
+      println!("rezzing ({}, {}) given ({}, {})", grid_x, grid_y, x, y);
+
+      grid.alive[grid.width as usize * grid_y + grid_x] = 1;
    }
 }

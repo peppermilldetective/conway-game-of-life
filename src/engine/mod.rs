@@ -19,20 +19,31 @@ fn main_loop(
    program: &glium::Program,
    display: &glium::Display)
 {
-   use glium::glutin::{ Event, WindowEvent };
+   use glium::glutin::{ Event, WindowEvent, dpi };
    use grid::Grid;
 
    let mut grid = Grid::create_grid();
 
-   let mut closed = false;
+   let window_dim = display.gl_window().window().get_outer_size().unwrap();
+   
+   let mut cursor_pos = dpi::LogicalPosition::new(0.0, 0.0);
+
+   let mut running = true;
    let mut paused = false;
    let mut input_taken = false;
-   while !closed {
+   while running {
       Grid::draw_grid(&grid, &display, program);
 
-      events_loop.poll_events(|ev| match ev {
-         Event::WindowEvent { event, .. } => match event {
-            WindowEvent::CloseRequested => closed = true,
+      events_loop.poll_events(|ev| if let Event::WindowEvent { event, .. } = ev {
+         match event {
+            // WINDOW EVENTS
+
+            WindowEvent::CloseRequested => {
+               running = false
+            },
+
+            // KEYBOARD EVENTS
+
             WindowEvent::KeyboardInput { input, .. } => {
                if !input_taken && input.scancode == 57 { // SPACE
                   paused = !paused;
@@ -46,13 +57,28 @@ fn main_loop(
                   Grid::clear_grid(&mut grid);
                   input_taken = true;
                }
+               else if !input_taken && input.scancode == 16 { // 'Q' Key
+                  running = false;
+               }
                else {
                   input_taken = false;
                }
             },
+
+            // MOUSE EVENTS
+
+            WindowEvent::CursorMoved { position, .. } => {
+               cursor_pos = position;
+            },
+            WindowEvent::MouseInput { state, button, .. } => {
+               Grid::process_click(
+                  &mut grid,
+                  cursor_pos.x/window_dim.width,
+                  cursor_pos.y/window_dim.height);
+            }
+
             _ => (),
-         },
-         _ => (),
+         }
       });
 
       if !paused {
@@ -72,9 +98,13 @@ fn create_display(width: f64, height: f64, title: &str) -> (glium::glutin::Event
    let events_loop = EventsLoop::new();
    let wb = WindowBuilder::new()
       .with_dimensions(dpi::LogicalSize::new(width as f64, height as f64))
-      .with_title(title);
+      .with_title(title)
+      .with_resizable(false);
    let cb = ContextBuilder::new();
-   let display = glium::Display::new(wb, cb, &events_loop).unwrap();
+   let display = 
+      glium::Display::new(wb, cb, &events_loop).unwrap();
+
+   display.gl_window().window().set_position(dpi::LogicalPosition::new(50f64, 50f64));
 
    (events_loop, display)
 }
