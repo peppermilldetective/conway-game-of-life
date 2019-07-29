@@ -47,96 +47,18 @@ impl<'a> Shaders<'a> {
    }
 }
 
-#[derive(Copy, Clone)]
-struct Cell {
-   position: [i32; 2],
-   draw_coord: [f32; 2],
-   deltas: [f32; 2],
-   alive: u32
-}
-
-trait Drawable {
-   fn draw(&self,
-      vertex_buffer: &glium::VertexBuffer<Vertex>,
-      index_buffer: &glium::IndexBuffer<u16>,
-      program: &glium::Program,
-      frame: &mut glium::Frame);
-   fn create_buffers(&self, display: &glium::Display) -> (glium::VertexBuffer<Vertex>, glium::IndexBuffer<u16>);
-}
-
-impl Cell {
-   fn new(x: i32, y: i32, draw_x: f32, draw_y: f32, d_x: f32, d_y: f32, alive: u32) -> Cell {
-      Cell {
-         position: [x, y],
-         draw_coord: [draw_x, draw_y],
-         deltas: [d_x, d_y],
-         alive
-      }
-   }
-}
-
-impl Drawable for Cell {
-   fn draw(&self,
-      vertex_buffer: &glium::VertexBuffer<Vertex>,
-      index_buffer: &glium::IndexBuffer<u16>,
-      program: &glium::Program,
-      frame: &mut glium::Frame)
-   {
-      use glium::Surface;
-
-      if self.alive == 0 {
-         return;
-      }
-
-      let uniforms = uniform! {
-      };
-
-      frame
-         .draw(
-            vertex_buffer,
-            index_buffer,
-            program,
-            &uniforms,
-            &Default::default(),
-         )
-         .unwrap();
-   }
-
-   fn create_buffers(&self, display: &glium::Display) -> (glium::VertexBuffer<Vertex>, glium::IndexBuffer<u16>) {
-      use glium::{
-         VertexBuffer,
-         IndexBuffer,
-         index::PrimitiveType
-      };
-
-      let x = self.draw_coord[0];
-      let y = self.draw_coord[1];
-      let d_x = self.deltas[0];
-      let d_y = self.deltas[1];
-
-      let shape = vec![
-         Vertex { position: [ x      , y      ] },
-         Vertex { position: [ x + d_x, y      ] },
-         Vertex { position: [ x      , y + d_y] },
-         Vertex { position: [ x + d_x, y + d_y] },
-      ];
-
-      (
-         VertexBuffer::new(display, &shape).unwrap(),
-         IndexBuffer::new(display, PrimitiveType::TrianglesList, &[0u16, 1, 2, 1, 2, 3]).unwrap()
-      )
-   }
-}
-
 struct Grid {
    width: i32,
    height: i32,
-   cells: Vec<Cell>
+   positions: Vec<[f32; 2]>,
+   deltas: [f32; 2],
+   alive: Vec<u32>
 }
 
 impl Grid {
    fn new(width: i32, height: i32) -> Grid {
-      let mut cells: Vec<Cell> = Vec::new();
+      let mut positions: Vec<[f32; 2]> = Vec::new();
+      let mut alive: Vec<u32> = Vec::new();
 
       let d_x = 2.0 / width as f32;
       let d_y = 2.0 / height as f32;
@@ -146,45 +68,91 @@ impl Grid {
             let draw_x = -1.0 + (d_x * x as f32);
             let draw_y = -1.0 + (d_y * y as f32);
 
-            cells.push(Cell::new(
-               x,
-               y,
+            positions.push([
                draw_x,
-               draw_y,
-               d_x,
-               d_y,
-               rand::random::<u32>() % 2
-            ));
+               draw_y
+            ]);
+
+
+            alive.push(rand::random::<u32>() % 2);
          }
       }
 
       Grid {
          width,
          height,
-         cells
+         positions,
+         deltas: [d_x, d_y],
+         alive
       }
    }
 
    fn draw_grid(grid: &Grid, display: &glium::Display, program: &glium::Program) {
       use glium::Surface;
+      use glium::{
+         VertexBuffer,
+         IndexBuffer,
+         index::PrimitiveType
+      };
 
       let mut frame = display.draw();
       frame.clear_color(0.0, 0.0, 0.0, 1.0);
 
-      let cells = &grid.cells;
+      let cells = &grid.positions;
+      let mut verts: Vec<Vertex> = Vec::new();
+      let mut inds: Vec<u16> = Vec::new();
 
-      for cell in cells {
-         let (vert_buf, ind_buf) = cell.create_buffers(display);
-         cell.draw(&vert_buf, &ind_buf, program, &mut frame);
+      let d_x = grid.deltas[0];
+      let d_y = grid.deltas[1];
+
+      let mut ind = 0;
+      for (i, cell) in cells.iter().enumerate() {
+         if grid.alive[i] == 0 {
+            continue;
+         }
+
+         let x = cell[0];
+         let y = cell[1];
+
+         verts.push(Vertex { position: [ x      , y      ] });
+         verts.push(Vertex { position: [ x + d_x, y      ] });
+         verts.push(Vertex { position: [ x      , y + d_y] });
+         verts.push(Vertex { position: [ x + d_x, y + d_y] });
+
+         inds.push(4*ind);
+         inds.push(4*ind + 1);
+         inds.push(4*ind + 2);
+         inds.push(4*ind + 1);
+         inds.push(4*ind + 2);
+         inds.push(4*ind + 3);
+
+         ind += 1;
       }
+
+      let (vertex_buffer, index_buffer) = (
+         VertexBuffer::new(display, &verts).unwrap(),
+         IndexBuffer::new(display, PrimitiveType::TrianglesList, &inds).unwrap()
+      );
+
+      let uniforms = uniform! {
+      };
+
+      frame
+         .draw(
+            &vertex_buffer,
+            &index_buffer,
+            program,
+            &uniforms,
+            &Default::default(),
+         ) .unwrap();
 
       frame.finish().unwrap();
    }
 
    fn next_state(grid: &mut Grid) {
-      let mut next_state: Vec<Cell> = Vec::new();
+      let mut next_state: Vec<u32> = Vec::new();
 
-      for (i, cell) in grid.cells.iter().enumerate() {
+      for (i, cell_alive) in grid.alive.iter().enumerate() {
          let i = i as i32;
          let width = grid.width;
          let area = width * grid.height;
@@ -199,38 +167,30 @@ impl Grid {
          let lr = (width * (down/width)) + ((down + width) + 1)%width;
 
          let sum =
-            grid.cells[ul as usize].alive + 
-            grid.cells[up as usize].alive +
-            grid.cells[ur as usize].alive + 
-            grid.cells[left as usize].alive +
-            grid.cells[right as usize].alive +
-            grid.cells[ll as usize].alive +
-            grid.cells[down as usize].alive +
-            grid.cells[lr as usize].alive;
+            grid.alive[ul as usize] + 
+            grid.alive[up as usize] +
+            grid.alive[ur as usize] + 
+            grid.alive[left as usize] +
+            grid.alive[right as usize] +
+            grid.alive[ll as usize] +
+            grid.alive[down as usize] +
+            grid.alive[lr as usize];
 
          let alive = 
-            if cell.alive == 1 && (sum < 2 || sum > 3) {
-               0
+            if *cell_alive == 1u32 && (sum < 2 || sum > 3) {
+               0u32
             }
-            else if cell.alive == 0 && sum == 3 {
-               1
+            else if *cell_alive == 0u32 && sum == 3 {
+               1u32
             }
             else {
-               cell.alive
+               *cell_alive
             };
 
-         next_state.push(Cell::new(
-            cell.position[0],
-            cell.position[1],
-            cell.draw_coord[0],
-            cell.draw_coord[1],
-            cell.deltas[0],
-            cell.deltas[1],
-            alive
-         ));
+         next_state.push(alive);
       }
 
-      grid.cells = next_state;
+      grid.alive = next_state;
    }
 }
 
