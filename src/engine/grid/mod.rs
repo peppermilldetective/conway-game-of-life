@@ -12,8 +12,8 @@ pub struct Grid {
 
 impl Grid {
    pub fn create_grid() -> Grid {
-      let rows = 400;
-      let columns = 400;
+      let rows = 50;
+      let columns = 50;
 
       Grid::new(rows, columns)
    }
@@ -160,11 +160,15 @@ impl Grid {
       grid.alive = cleared;
    }
 
-   pub fn process_click(grid: &mut Grid, x: f64, y: f64) {
-      let grid_x = (x*f64::from(grid.width)).floor() as usize;
-      let grid_y = (y*f64::from(grid.height)).floor() as usize;
+   pub fn process_click(grid: &mut Grid, x: f64, y: f64, window_w: f64, window_h: f64) {
+      let width = f64::from(grid.width);
+      let height = f64::from(grid.height);
 
-      println!("rezzing ({}, {}) given ({}, {})", grid_x, grid_y, x, y);
+      let step_x = width / window_w;
+      let step_y = height / window_h;
+
+      let grid_x = (x*step_x) as usize;
+      let grid_y = (y*step_y) as usize;
 
       grid.alive[grid.width as usize * grid_y + grid_x] = 1;
    }

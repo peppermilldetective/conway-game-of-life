@@ -19,7 +19,7 @@ fn main_loop(
    program: &glium::Program,
    display: &glium::Display)
 {
-   use glium::glutin::{ Event, WindowEvent, dpi };
+   use glium::glutin::{ Event, WindowEvent, dpi, MouseButton, ElementState };
    use grid::Grid;
 
    let mut grid = Grid::create_grid();
@@ -33,6 +33,8 @@ fn main_loop(
    let mut input_taken = false;
    while running {
       Grid::draw_grid(&grid, &display, program);
+
+      std::thread::sleep(std::time::Duration::from_millis(250));
 
       events_loop.poll_events(|ev| if let Event::WindowEvent { event, .. } = ev {
          match event {
@@ -71,10 +73,14 @@ fn main_loop(
                cursor_pos = position;
             },
             WindowEvent::MouseInput { state, button, .. } => {
-               Grid::process_click(
-                  &mut grid,
-                  cursor_pos.x/window_dim.width,
-                  cursor_pos.y/window_dim.height);
+               if button == MouseButton::Left && state == ElementState::Pressed {
+                  Grid::process_click(
+                     &mut grid,
+                     cursor_pos.x,
+                     cursor_pos.y,
+                     window_dim.width,
+                     window_dim.height);
+               }
             }
 
             _ => (),
